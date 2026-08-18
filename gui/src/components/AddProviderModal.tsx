@@ -153,6 +153,7 @@ export default function AddProviderModal({
         apiKey: "",
         apiKeyTransport: undefined,
         defaultModel: p.defaultModel ?? "",
+        allowEncryptedV2AgentTasks: false,
         allowPrivateNetwork: false,
       },
     });

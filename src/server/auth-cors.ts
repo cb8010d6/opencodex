@@ -622,6 +622,12 @@ export function providerManagementConfigError(name: unknown, provider: unknown):
     return `provider ${name} must not include codexAccountMode`;
   }
   const typed = provider as unknown as OcxProviderConfig;
+  if (raw.allowEncryptedV2AgentTasks !== undefined && typeof raw.allowEncryptedV2AgentTasks !== "boolean") {
+    return `provider ${name} allowEncryptedV2AgentTasks must be a boolean`;
+  }
+  if (raw.allowEncryptedV2AgentTasks === true && typed.adapter !== "openai-responses") {
+    return `provider ${name} allowEncryptedV2AgentTasks requires adapter=openai-responses`;
+  }
   const baseUrlError = providerBaseUrlConfigError(typed.baseUrl);
   if (baseUrlError) return `provider ${name} ${baseUrlError}`;
   if (effectiveGoogleMode(name, typed) === "vertex" && typed.location !== undefined) {
@@ -1001,6 +1007,59 @@ export function safeConfigDTO(config: OcxConfig): unknown {
     if (name === "xai") {
       dto.xaiResponsesOptInState = xaiResponsesOptInState(provider);
     }
+    for (const key of [
+      "defaultModel",
+      "alias",
+      "modelAliases",
+      "defaultAliases",
+      "disabled",
+      "allowEncryptedV2AgentTasks",
+      "allowPrivateNetwork",
+      "authMode",
+      "apiKeyTransport",
+      "keyOptional",
+      "freeTier",
+      "liveModels",
+      "requestPacing",
+      "models",
+      "contextWindow",
+      "modelContextWindows",
+      "modelAutoCompactTokenLimits",
+      "defaultMaxOutputTokens",
+      "modelMaxOutputTokens",
+      "openRouterRouting",
+      "modelOpenRouterRouting",
+      "vercelGatewayRouting",
+      "modelVercelGatewayRouting",
+      "reasoningEfforts",
+      "modelReasoningEfforts",
+      "reasoningWireFormat",
+      "noVisionModels",
+      "noReasoningModels",
+      "noTemperatureModels",
+      "noTopPModels",
+      "noPenaltyModels",
+      "noStructuredOutputModels",
+      "upstreamHttpVersion",
+      "autoToolChoiceOnlyModels",
+      "preserveReasoningContentModels",
+      "requiresReasoningPlaceholderModels",
+      "escapeBuiltinToolNames",
+    ] as const) {
+      copyIfDefined(dto, provider, key);
+    }
+    const modelCosts = sanitizeModelCostsForDisplay(provider.modelCosts);
+    if (modelCosts) dto.modelCosts = modelCosts;
+    // Resolve the note by DESTINATION, not by name. A preset saved under a custom name is
+    // still pointed at the same vendor route, and a usage restriction the user needs to see
+    // must not disappear because the row was renamed. Prefer the same-name entry so an
+    // unrenamed provider keeps its exact registry note.
+    const registryNote = (providerMatchesRegistryTransport(name, provider)
+      ? getProviderRegistryEntry(name)
+      : registryEntryForProviderDestination(provider))?.note;
+    if (typeof registryNote === "string" && registryNote.trim()) dto.note = registryNote;
+    const codexAccountMode = providerCodexAccountMode(name, provider);
+    if (codexAccountMode) dto.codexAccountMode = codexAccountMode;
     providers[name] = dto;
   }
   return {
