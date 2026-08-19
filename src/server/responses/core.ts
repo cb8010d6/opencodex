@@ -1760,6 +1760,19 @@ function unreadableEncryptedAgentTaskResponse(): Response {
   );
 }
 
+function routeCanReceiveEncryptedV2AgentTasks(
+  route: Pick<RouteResult, "providerName" | "modelId" | "provider">,
+  inboundWire: InboundWire = "responses",
+): boolean {
+  const resolvedProvider = resolveWireProtocolOverride(
+    route.providerName,
+    route.modelId,
+    route.provider,
+    inboundWire,
+  );
+  return canReceiveEncryptedV2AgentTasks(resolvedProvider);
+}
+
 type ResponsesAuthResolution =
   | { ok: true; authCtx: CodexAuthContext; headers: Headers; substituteMainCredential: boolean }
   | { ok: false; response: Response };
@@ -2287,7 +2300,7 @@ export async function handleComboResponses(
     if (!provider || provider.disabled === true) return false;
     try {
       const route = routeConcreteModel(config, `${target.provider}/${target.model}`);
-      return canReceiveEncryptedV2AgentTasks(route.provider);
+      return routeCanReceiveEncryptedV2AgentTasks(route);
     } catch {
       return false;
     }
@@ -3075,7 +3088,7 @@ async function handleResponsesInner(
     threadSpawn
     && unreadableEncryptedAgentTask
     && agentTaskRecovery
-    && !canReceiveEncryptedV2AgentTasks(route.provider)
+    && !routeCanReceiveEncryptedV2AgentTasks(route, inboundWire)
     && !options.comboAttempt
   ) {
     let recovered = false;
@@ -3203,7 +3216,7 @@ async function handleResponsesInner(
   // Encrypted child tasks may reach canonical ChatGPT or an explicitly trusted
   // Responses provider. This check runs against the FINAL route so compatible-only
   // fallback can rescue an incompatible primary.
-  if (!canReceiveEncryptedV2AgentTasks(route.provider) && unreadableEncryptedAgentTask) {
+  if (!routeCanReceiveEncryptedV2AgentTasks(route, inboundWire) && unreadableEncryptedAgentTask) {
     return unreadableEncryptedAgentTaskResponse();
   }
 
