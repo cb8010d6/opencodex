@@ -91,7 +91,7 @@ import {
   type ProviderEditorConfigDTO,
   type ProviderEditorProviderDTO,
 } from "../auth-cors";
-import { providerServiceTierConfigError } from "./provider-capability-config";
+import { providerEncryptedV2ConfigError, providerServiceTierConfigError } from "./provider-capability-config";
 import { providerEmptyToolOutputConfigError } from "../../config/provider-validation";
 import { applySystemEnvToggle } from "../system-env";
 import {
@@ -732,6 +732,8 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
     )
       ?? providerEmptyToolOutputConfigError(name, provider);
     if (providerError) return jsonResponse({ error: "provider reload target invalid" }, 409);
+    const encryptedV2Error = providerEncryptedV2ConfigError(name, provider);
+    if (encryptedV2Error) return jsonResponse({ error: "provider reload target invalid" }, 409);
     const namespaceCollision = codexAccountNamespaceProviderCollisionError(
       diskConfig.codexAccountNamespaces,
       name,
@@ -893,6 +895,8 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
     if (rawProvider.upstreamWebsocket !== undefined && typeof rawProvider.upstreamWebsocket !== "boolean") {
       return jsonResponse({ error: "upstreamWebsocket must be a boolean" }, 400);
     }
+    const encryptedV2Error = providerEncryptedV2ConfigError(name, transportCandidate);
+    if (encryptedV2Error) return jsonResponse({ error: encryptedV2Error }, 400);
     const serviceTierError = providerServiceTierConfigError(name, transportCandidate);
     if (serviceTierError) return jsonResponse({ error: serviceTierError }, 400);
     const prov = stripCodexRuntimeProviderFields(transportCandidate as unknown as OcxProviderConfig);
@@ -1100,6 +1104,8 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
           ?? providerEmptyToolOutputConfigError(name, next);
       if (providerError) return jsonResponse({ error: providerError }, 400);
       if (!canonicalBudgetOnly) {
+        const encryptedV2Error = providerEncryptedV2ConfigError(name, next);
+        if (encryptedV2Error) return jsonResponse({ error: encryptedV2Error }, 400);
         const serviceTierError = providerServiceTierConfigError(name, next);
         if (serviceTierError) return jsonResponse({ error: serviceTierError }, 400);
         // Same DNS gate as POST and re-enable: the canonical built-in OpenAI forward
@@ -1146,6 +1152,11 @@ export async function handleProviderRoutes(ctx: ManagementContext): Promise<Resp
           return;
         }
         if (!canonicalBudgetOnly) {
+          const encryptedV2Error = providerEncryptedV2ConfigError(name, replay.next);
+          if (encryptedV2Error) {
+            replayError = encryptedV2Error;
+            return;
+          }
           const serviceTierError = providerServiceTierConfigError(name, replay.next);
           if (serviceTierError) {
             replayError = serviceTierError;
