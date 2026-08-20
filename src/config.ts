@@ -1623,6 +1623,35 @@ function sanitizeRetryOn429ForLoad(parsed: unknown): void {
 }
 
 /**
+ * Load-time degradation for the encrypted V2 task capability. This flag is an
+ * operator trust decision, but one malformed hand edit must not replace every
+ * configured provider, key, and route with factory defaults. Invalid values are
+ * fail-closed by removing the opt-in; management and candidate validation still
+ * reject the same inputs at their write boundaries.
+ */
+function sanitizeEncryptedV2AgentTasksForLoad(parsed: unknown): void {
+  if (!parsed || typeof parsed !== "object") return;
+  const providers = (parsed as Record<string, unknown>).providers;
+  if (!providers || typeof providers !== "object" || Array.isArray(providers)) return;
+  for (const [name, provider] of Object.entries(providers as Record<string, unknown>)) {
+    if (!provider || typeof provider !== "object" || Array.isArray(provider)) continue;
+    const raw = provider as Record<string, unknown>;
+    const capability = raw.allowEncryptedV2AgentTasks;
+    if (capability === undefined) continue;
+    const safeProviderName = JSON.stringify(redactSecretString(name));
+    if (typeof capability !== "boolean") {
+      delete raw.allowEncryptedV2AgentTasks;
+      console.warn(`⚠️  config.json providers.${safeProviderName}.allowEncryptedV2AgentTasks (${typeof capability}) is invalid — disabling encrypted V2 task passthrough while preserving the provider`);
+      continue;
+    }
+    if (capability === true && raw.adapter !== "openai-responses") {
+      delete raw.allowEncryptedV2AgentTasks;
+      console.warn(`⚠️  config.json providers.${safeProviderName}.allowEncryptedV2AgentTasks requires adapter=openai-responses — disabling encrypted V2 task passthrough while preserving the provider`);
+    }
+  }
+}
+
+/**
  * Management write-boundary validation for `retryOn429` (fail closed). Unlike the
  * lenient load-time sanitizer, invalid values and unknown keys are rejected outright so
  * a POST/PATCH cannot persist a policy the proxy would then silently degrade. Reuses the
@@ -2089,6 +2118,7 @@ export function loadConfig(): OcxConfig {
     sanitizeAliasesForLoad(parsed);
     sanitizeModelDisplayNamesForLoad(parsed);
     sanitizeRetryOn429ForLoad(parsed);
+    sanitizeEncryptedV2AgentTasksForLoad(parsed);
     sanitizeModelCostsForLoad(parsed);
     const result = configSchema.safeParse(parsed);
     if (result.success) {
@@ -2617,6 +2647,7 @@ function configDiagnosticsFromRaw(raw: string): ConfigDiagnostics {
     // persist that fallback over the user's providers/keys).
     sanitizeModelDisplayNamesForLoad(parsed);
     sanitizeRetryOn429ForLoad(parsed);
+    sanitizeEncryptedV2AgentTasksForLoad(parsed);
     sanitizeModelCostsForLoad(parsed);
     const result = configSchema.safeParse(parsed);
     if (result.success) {
