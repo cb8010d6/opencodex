@@ -36,9 +36,8 @@ import {
   OPENAI_CODEX_PROVIDER_ID,
   isCanonicalOpenAiForwardProvider,
 } from "../providers/openai-tiers";
-import { resolveOpenAiVirtualModel } from "../providers/openai-virtual-models";
 import { routeModel, type RouteResult } from "../router";
-import { resolveWireProtocolOverride } from "../server/adapter-resolve";
+import { resolveFinalWireProtocolOverride } from "../server/adapter-resolve";
 import { sweepExpiredOnWrite } from "../lib/state-store-sweeper";
 import { codexAccountNamespaceForModel } from "./account-namespace-match";
 import { ACCOUNT_GATED_NATIVE_OPENAI_MODELS } from "./catalog/native-models";
@@ -367,9 +366,9 @@ export function selectAvailableSubagentModel(
     if (nativeFallbackOnly) {
       const route = tryRouteFallbackModel(config, candidate);
       const resolvedProvider = route
-        ? resolveWireProtocolOverride(
+        ? resolveFinalWireProtocolOverride(
             route.providerName,
-            resolveOpenAiVirtualModel(route.providerName, route.modelId)?.wireModelId ?? route.modelId,
+            route.modelId,
             route.provider,
             inboundWire,
           )

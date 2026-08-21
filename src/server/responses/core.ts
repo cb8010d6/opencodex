@@ -229,11 +229,10 @@ import { captureConfigGeneration } from "../../lib/state-store-sweeper";
 import {
   applyOpenAiVirtualModel,
   resolveOpenAiCompactModel,
-  resolveOpenAiVirtualModel,
 } from "../../providers/openai-virtual-models";
 import { isUsageDebugEnabled } from "../../usage/debug";
 import { readJsonRequestBody, DecompressedBodyTooLargeError, UnsupportedContentEncodingError } from "../request-decompress";
-import { resolveAdapter, resolveWireProtocolOverride } from "../adapter-resolve";
+import { resolveAdapter, resolveFinalWireProtocolOverride, resolveWireProtocolOverride } from "../adapter-resolve";
 import {
   providerModelResponsesTerminalRepair,
   providerModelResponsesUpstreamStreaming,
@@ -1768,11 +1767,9 @@ function routeCanReceiveEncryptedV2AgentTasks(
   route: Pick<RouteResult, "providerName" | "modelId" | "provider">,
   inboundWire: InboundWire = "responses",
 ): boolean {
-  const wireModelId = resolveOpenAiVirtualModel(route.providerName, route.modelId)?.wireModelId
-    ?? route.modelId;
-  const resolvedProvider = resolveWireProtocolOverride(
+  const resolvedProvider = resolveFinalWireProtocolOverride(
     route.providerName,
-    wireModelId,
+    route.modelId,
     route.provider,
     inboundWire,
   );
