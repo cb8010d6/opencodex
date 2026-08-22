@@ -1763,9 +1763,18 @@ function unreadableEncryptedAgentTaskResponse(): Response {
   );
 }
 
+function sameUpstreamOrigin(left: string, right: string): boolean {
+  try {
+    return new URL(left.trim()).origin === new URL(right.trim()).origin;
+  } catch {
+    return false;
+  }
+}
+
 function routeCanReceiveEncryptedV2AgentTasks(
   route: Pick<RouteResult, "providerName" | "modelId" | "provider">,
   inboundWire: InboundWire,
+  approvedBaseUrl?: string,
 ): boolean {
   const resolvedProvider = resolveFinalWireProtocolOverride(
     route.providerName,
@@ -1773,7 +1782,14 @@ function routeCanReceiveEncryptedV2AgentTasks(
     route.provider,
     inboundWire,
   );
-  return canReceiveEncryptedV2AgentTasks(resolvedProvider);
+  if (!canReceiveEncryptedV2AgentTasks(resolvedProvider)) return false;
+  // The capability is consent for the destination the operator approved, not for a
+  // later transport-derived endpoint. OAuth credential metadata may legitimately
+  // select a Copilot host for OAuth, but that host must still match the approved
+  // provider origin before opaque ciphertext is admitted.
+  return resolvedProvider.allowEncryptedV2AgentTasks !== true
+    || approvedBaseUrl === undefined
+    || sameUpstreamOrigin(approvedBaseUrl, resolvedProvider.baseUrl);
 }
 
 type ResponsesAuthResolution =
@@ -3248,9 +3264,21 @@ async function handleResponsesInner(
     inboundTransport: options.inboundTransport,
   });
   // Virtual model normalization can change both the wire model and its model-specific
-  // adapter. Enforce the ciphertext boundary only after that final wire decision, while
-  // still preceding auth, adapter construction, and all provider I/O.
-  if (unreadableEncryptedAgentTask && !routeCanReceiveEncryptedV2AgentTasks(route, inboundWire)) {
+  // adapter. Resolve the transport before the authoritative ciphertext gate as well: a
+  // provider's OAuth credential may supply a different Copilot host, and the opt-in is
+  // valid only for the destination whose origin the operator approved.
+  const approvedEncryptedV2BaseUrl = route.provider.baseUrl;
+  const preAuthTransportProvider = resolveProviderTransport(
+    route.providerName,
+    route.provider,
+    parsed.options.promptCacheKey,
+    route.providerName === "github-copilot" ? getOAuthCredentialApiBaseUrl(route.providerName) : undefined,
+  );
+  const preAuthTransportRoute = { ...route, provider: preAuthTransportProvider };
+  if (
+    unreadableEncryptedAgentTask
+    && !routeCanReceiveEncryptedV2AgentTasks(preAuthTransportRoute, inboundWire, approvedEncryptedV2BaseUrl)
+  ) {
     return unreadableEncryptedAgentTaskResponse();
   }
   // Attribute local auth/cooldown failures to the public selector too; exact auth may fail before
@@ -3526,6 +3554,13 @@ async function handleResponsesInner(
       ? resolveCopilotApiBaseUrl(sentOAuthSnapshot?.apiBaseUrl)
       : undefined,
   );
+  if (
+    unreadableEncryptedAgentTask
+    && !routeCanReceiveEncryptedV2AgentTasks(route, inboundWire, approvedEncryptedV2BaseUrl)
+  ) {
+    releaseCodexAuthContextProbeLease(authCtx);
+    return unreadableEncryptedAgentTaskResponse();
+  }
   let adapterProvider = resolveWireProtocolOverride(route.providerName, route.modelId, route.provider, inboundWire);
   const stripClaudeMainAuth = options.stripClaudeMainAuthForNoncanonicalForward === true
     && adapterProvider.adapter === "openai-responses"
@@ -4367,6 +4402,18 @@ async function handleResponsesInner(
           ? resolveCopilotApiBaseUrl(refreshed.apiBaseUrl)
           : undefined,
       );
+      if (
+        unreadableEncryptedAgentTask
+        && !routeCanReceiveEncryptedV2AgentTasks(
+          { ...route, provider: refreshedProvider },
+          inboundWire,
+          approvedEncryptedV2BaseUrl,
+        )
+      ) {
+        upstream.abort();
+        releaseCodexAuthContextProbeLease(authCtx);
+        return unreadableEncryptedAgentTaskResponse();
+      }
       route.provider = refreshedProvider;
       const refreshedAdapter = resolveAdapter(
         resolveWireProtocolOverride(route.providerName, route.modelId, refreshedProvider, inboundWire),
@@ -6049,6 +6096,17 @@ async function handleResponsesInner(
             ? resolveCopilotApiBaseUrl(refreshed.apiBaseUrl)
             : undefined,
         );
+        if (
+          unreadableEncryptedAgentTask
+          && !routeCanReceiveEncryptedV2AgentTasks(
+            { ...route, provider: refreshedProvider },
+            inboundWire,
+            approvedEncryptedV2BaseUrl,
+          )
+        ) {
+          cleanupUpstreamAbort();
+          return unreadableEncryptedAgentTaskResponse();
+        }
         route.provider = refreshedProvider;
         invalidateSameTargetRequest();
         activeAdapter = resolveAdapter(
