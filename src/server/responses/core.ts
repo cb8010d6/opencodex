@@ -1774,7 +1774,7 @@ function sameUpstreamOrigin(left: string, right: string): boolean {
 function routeCanReceiveEncryptedV2AgentTasks(
   route: Pick<RouteResult, "providerName" | "modelId" | "provider">,
   inboundWire: InboundWire,
-  approvedBaseUrl?: string,
+  approvedBaseUrl: string,
 ): boolean {
   const resolvedProvider = resolveFinalWireProtocolOverride(
     route.providerName,
@@ -1787,9 +1787,7 @@ function routeCanReceiveEncryptedV2AgentTasks(
   // later transport-derived endpoint. OAuth credential metadata may legitimately
   // select a Copilot host for OAuth, but that host must still match the approved
   // provider origin before opaque ciphertext is admitted.
-  return resolvedProvider.allowEncryptedV2AgentTasks !== true
-    || approvedBaseUrl === undefined
-    || sameUpstreamOrigin(approvedBaseUrl, resolvedProvider.baseUrl);
+  return sameUpstreamOrigin(approvedBaseUrl, resolvedProvider.baseUrl);
 }
 
 type ResponsesAuthResolution =
@@ -2319,7 +2317,18 @@ export async function handleComboResponses(
     if (!provider || provider.disabled === true) return false;
     try {
       const route = routeConcreteModel(config, `${target.provider}/${target.model}`);
-      return routeCanReceiveEncryptedV2AgentTasks(route, options.inboundWire ?? "responses");
+      const approvedBaseUrl = route.provider.baseUrl;
+      const transportProvider = resolveProviderTransport(
+        route.providerName,
+        route.provider,
+        undefined,
+        route.providerName === "github-copilot" ? getOAuthCredentialApiBaseUrl(route.providerName) : undefined,
+      );
+      return routeCanReceiveEncryptedV2AgentTasks(
+        { ...route, provider: transportProvider },
+        options.inboundWire ?? "responses",
+        approvedBaseUrl,
+      );
     } catch {
       return false;
     }
@@ -3108,7 +3117,19 @@ async function handleResponsesInner(
     threadSpawn
     && unreadableEncryptedAgentTask
     && agentTaskRecovery
-    && !routeCanReceiveEncryptedV2AgentTasks(route, inboundWire)
+    && !routeCanReceiveEncryptedV2AgentTasks(
+      {
+        ...route,
+        provider: resolveProviderTransport(
+          route.providerName,
+          route.provider,
+          parsed.options.promptCacheKey,
+          route.providerName === "github-copilot" ? getOAuthCredentialApiBaseUrl(route.providerName) : undefined,
+        ),
+      },
+      inboundWire,
+      route.provider.baseUrl,
+    )
     && !options.comboAttempt
   ) {
     let recovered = false;
