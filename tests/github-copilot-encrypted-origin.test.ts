@@ -112,7 +112,7 @@ describe("encrypted Copilot tasks stay bound to the approved origin", () => {
     }), config(copilotProvider({ authMode: "key", apiKey: "key-fixture" })), { model: "", provider: "" });
 
     expect(response.status).toBe(200);
-    expect(urls).toEqual(["https://api.githubcopilot.com/responses"]);
+    expect(urls).toEqual(["https://api.githubcopilot.com/v1/responses"]);
     expect(urls.some(url => url.includes("api.individual.githubcopilot.com"))).toBe(false);
   });
 
@@ -161,7 +161,7 @@ describe("encrypted Copilot tasks stay bound to the approved origin", () => {
     }), comboConfig(), { model: "", provider: "" });
 
     expect(response.status).toBe(200);
-    expect(urls).toEqual(["https://relay.example.test/responses"]);
+    expect(urls).toEqual(["https://relay.example.test/v1/responses"]);
     expect(urls.some(url => url.includes("api.individual.githubcopilot.com"))).toBe(false);
   });
 });
