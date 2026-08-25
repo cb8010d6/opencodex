@@ -201,10 +201,10 @@ import type { DataPlaneAdmission } from "../auth-cors";
 import { createTranslatorBudget, isTranslatorBudgetExceededError, type TranslatorBudget } from "../../lib/translator-budget";
 import { listOpenAiForwardSidecarCandidates, resolveFirstUsableOpenAiSidecar, type ResolvedOpenAiForwardSidecar } from "../../providers/openai-sidecar";
 import {
-  canReceiveEncryptedV2AgentTasks,
   isCanonicalOpenAiForwardProvider,
   OPENAI_CODEX_PROVIDER_ID,
 } from "../../providers/openai-tiers";
+import { canRouteEncryptedV2AgentTasks } from "../../providers/encrypted-v2-transport";
 import { providerContextCap } from "../../providers/context-cap";
 import {
   fastPolicyForModel,
@@ -232,7 +232,7 @@ import {
 } from "../../providers/openai-virtual-models";
 import { isUsageDebugEnabled } from "../../usage/debug";
 import { readJsonRequestBody, DecompressedBodyTooLargeError, UnsupportedContentEncodingError } from "../request-decompress";
-import { resolveAdapter, resolveFinalWireProtocolOverride, resolveWireProtocolOverride } from "../adapter-resolve";
+import { resolveAdapter, resolveWireProtocolOverride } from "../adapter-resolve";
 import {
   providerModelResponsesTerminalRepair,
   providerModelResponsesUpstreamStreaming,
@@ -1763,33 +1763,6 @@ function unreadableEncryptedAgentTaskResponse(): Response {
   );
 }
 
-function sameUpstreamOrigin(left: string, right: string): boolean {
-  try {
-    return new URL(left.trim()).origin === new URL(right.trim()).origin;
-  } catch {
-    return false;
-  }
-}
-
-function routeCanReceiveEncryptedV2AgentTasks(
-  route: Pick<RouteResult, "providerName" | "modelId" | "provider">,
-  inboundWire: InboundWire,
-  approvedBaseUrl: string,
-): boolean {
-  const resolvedProvider = resolveFinalWireProtocolOverride(
-    route.providerName,
-    route.modelId,
-    route.provider,
-    inboundWire,
-  );
-  if (!canReceiveEncryptedV2AgentTasks(resolvedProvider)) return false;
-  // The capability is consent for the destination the operator approved, not for a
-  // later transport-derived endpoint. OAuth credential metadata may legitimately
-  // select a Copilot host for OAuth, but that host must still match the approved
-  // provider origin before opaque ciphertext is admitted.
-  return sameUpstreamOrigin(approvedBaseUrl, resolvedProvider.baseUrl);
-}
-
 type ResponsesAuthResolution =
   | { ok: true; authCtx: CodexAuthContext; headers: Headers; substituteMainCredential: boolean }
   | { ok: false; response: Response };
@@ -2317,17 +2290,10 @@ export async function handleComboResponses(
     if (!provider || provider.disabled === true) return false;
     try {
       const route = routeConcreteModel(config, `${target.provider}/${target.model}`);
-      const approvedBaseUrl = route.provider.baseUrl;
-      const transportProvider = resolveProviderTransport(
-        route.providerName,
-        route.provider,
-        undefined,
-        route.providerName === "github-copilot" ? getOAuthCredentialApiBaseUrl(route.providerName) : undefined,
-      );
-      return routeCanReceiveEncryptedV2AgentTasks(
-        { ...route, provider: transportProvider },
+      return canRouteEncryptedV2AgentTasks(
+        route,
         options.inboundWire ?? "responses",
-        approvedBaseUrl,
+        route.provider.baseUrl,
       );
     } catch {
       return false;
@@ -3117,19 +3083,7 @@ async function handleResponsesInner(
     threadSpawn
     && unreadableEncryptedAgentTask
     && agentTaskRecovery
-    && !routeCanReceiveEncryptedV2AgentTasks(
-      {
-        ...route,
-        provider: resolveProviderTransport(
-          route.providerName,
-          route.provider,
-          parsed.options.promptCacheKey,
-          route.providerName === "github-copilot" ? getOAuthCredentialApiBaseUrl(route.providerName) : undefined,
-        ),
-      },
-      inboundWire,
-      route.provider.baseUrl,
-    )
+    && !canRouteEncryptedV2AgentTasks(route, inboundWire, route.provider.baseUrl, parsed.options.promptCacheKey)
     && !options.comboAttempt
   ) {
     let recovered = false;
@@ -3289,16 +3243,9 @@ async function handleResponsesInner(
   // provider's OAuth credential may supply a different Copilot host, and the opt-in is
   // valid only for the destination whose origin the operator approved.
   const approvedEncryptedV2BaseUrl = route.provider.baseUrl;
-  const preAuthTransportProvider = resolveProviderTransport(
-    route.providerName,
-    route.provider,
-    parsed.options.promptCacheKey,
-    route.providerName === "github-copilot" ? getOAuthCredentialApiBaseUrl(route.providerName) : undefined,
-  );
-  const preAuthTransportRoute = { ...route, provider: preAuthTransportProvider };
   if (
     unreadableEncryptedAgentTask
-    && !routeCanReceiveEncryptedV2AgentTasks(preAuthTransportRoute, inboundWire, approvedEncryptedV2BaseUrl)
+    && !canRouteEncryptedV2AgentTasks(route, inboundWire, approvedEncryptedV2BaseUrl, parsed.options.promptCacheKey)
   ) {
     return unreadableEncryptedAgentTaskResponse();
   }
@@ -3577,7 +3524,7 @@ async function handleResponsesInner(
   );
   if (
     unreadableEncryptedAgentTask
-    && !routeCanReceiveEncryptedV2AgentTasks(route, inboundWire, approvedEncryptedV2BaseUrl)
+    && !canRouteEncryptedV2AgentTasks(route, inboundWire, approvedEncryptedV2BaseUrl, parsed.options.promptCacheKey)
   ) {
     releaseCodexAuthContextProbeLease(authCtx);
     return unreadableEncryptedAgentTaskResponse();
@@ -4425,10 +4372,11 @@ async function handleResponsesInner(
       );
       if (
         unreadableEncryptedAgentTask
-        && !routeCanReceiveEncryptedV2AgentTasks(
+        && !canRouteEncryptedV2AgentTasks(
           { ...route, provider: refreshedProvider },
           inboundWire,
           approvedEncryptedV2BaseUrl,
+          parsed.options.promptCacheKey,
         )
       ) {
         upstream.abort();
@@ -6119,10 +6067,11 @@ async function handleResponsesInner(
         );
         if (
           unreadableEncryptedAgentTask
-          && !routeCanReceiveEncryptedV2AgentTasks(
+          && !canRouteEncryptedV2AgentTasks(
             { ...route, provider: refreshedProvider },
             inboundWire,
             approvedEncryptedV2BaseUrl,
+            parsed.options.promptCacheKey,
           )
         ) {
           cleanupUpstreamAbort();
