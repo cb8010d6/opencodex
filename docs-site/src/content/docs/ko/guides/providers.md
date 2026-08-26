@@ -82,7 +82,7 @@ ChatGPT 패스스루 카탈로그에는 GPT-5.6 Sol/Terra/Luna의 네임스페�
 따라 달라집니다.
 
 암호화된 V2 하위 작업의 신뢰 경계와 `allowEncryptedV2AgentTasks` 설정은
-[프로바이더 설정 레퍼런스](/reference/configuration/providers/)에 설명되어 있습니다. 이 옵션은
+[프로바이더 설정 레퍼런스](/ko/reference/configuration/providers/)에 설명되어 있습니다. 이 옵션은
 확인된 비정규 `openai-responses` 업스트림에만 적용되며, 선택한 모델의 최종 wire가
 `openai-responses`일 때만 암호문을 그대로 전달합니다. `modelAdapters`가 `openai-chat`으로
 해석되거나 자격이 없는 경로는 `unreadable_encrypted_agent_task`로 fail closed 처리됩니다.
