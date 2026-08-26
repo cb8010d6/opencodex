@@ -150,7 +150,7 @@ Bu, bilinen [#92 sınırlamasıdır](https://github.com/lidge-jun/opencodex/issu
 opencodex boş veya okunamayan bir görevi iletmek yerine güvenli bir şekilde
 başarısız olur:
 
-- Uygun olmayan, yerel olmayan bir rota `error.code =
+- Uygun olmayan, doğrudan yerel olmayan bir rota `error.code =
   "unreadable_encrypted_agent_task"` ile HTTP 400 döndürür ve şifreli metni
   yankılamaz.
 - Bir kombo, yeniden denemeler de dahil olmak üzere bu görev için yalnızca
