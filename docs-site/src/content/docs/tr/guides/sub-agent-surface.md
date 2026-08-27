@@ -160,9 +160,10 @@ başarısız olur:
 - Okunabilir bir düz metin görevi normal rota ve geri dönüş davranışını korur.
 
 Kurtarma seçenekleri, yerel bir ChatGPT çocuğu seçmek, komboya yerel bir ChatGPT
-hedefi eklemek, heterojen sağlayıcı yetkilendirmesi için v1 kullanmak veya
-arayanı denetlediğinizde görevi düz metin v2 `agent_message` içeriği olarak
-yeniden göndermektir.
+hedefi veya nihai wire'ı `openai-responses` olarak kalan
+`allowEncryptedV2AgentTasks: true` ayarlı bir Responses hedefi eklemek, heterojen
+sağlayıcı yetkilendirmesi için v1 kullanmak veya arayanı denetlediğinizde görevi
+düz metin v2 `agent_message` içeriği olarak yeniden göndermektir.
 
 Kurallı olmayan bir Responses uç noktasının bu şifreli yükü tükettiği veya rölelediği
 doğrulandıysa, sağlayıcı ayarlarında **Şifrelenmiş V2 alt ajan görevlerini ilet**

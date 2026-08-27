@@ -1208,7 +1208,7 @@ export const tr: Record<TKey, string> = {
   "pws.note": "Not",
   "pws.allowPrivateNetwork": "Yerel/özel ağa izin ver",
   "pws.encryptedV2Passthrough": "Şifreli V2 alt ajan görevlerini ilet",
-  "pws.encryptedV2PassthroughDesc": "Bu Responses uç noktasının Codex'in opak şifreli görevini işleyebildiğine güvenin. OpenCodex görevin şifresini çözmez veya kurtarmaz. Yalnızca sağlayıcı uyumluluğunu doğruladıktan sonra etkinleştirin.",
+  "pws.encryptedV2PassthroughDesc": "Bu Responses uç noktasının Codex'in opak şifreli V2 alt görev metnini tüketebileceğine veya olduğu gibi röleleyebileceğine güvenin. OpenCodex şifreyi çözmez, çevirmez veya kurtarmaz. Yalnızca sağlayıcı uyumluluğunu doğruladıktan sonra etkinleştirin.",
   "pws.encryptedV2Confirm": "Bu sağlayıcıya opak şifreli V2 alt ajan görevleri emanet edilsin mi? Uyumsuz uç noktalar okunabilir bir görev olmadan başarısız olabilir.",
   "pws.liveModels": "Sağlayıcıdan canlı model keşfet",
   "pws.liveModelsDesc": "Sağlayıcının canlı model kataloğunu çekin.",

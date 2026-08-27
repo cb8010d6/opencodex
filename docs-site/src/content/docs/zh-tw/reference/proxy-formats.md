@@ -230,4 +230,4 @@ Anthropic 來源的失敗以 Anthropic 的錯誤封裝渲染，因此該方言�
 
 代理將真實的後端密文視為不透明。結構有效的密文被逐位元組保留：opencodex 不解密它、轉譯其內容，或為另一個供應商重新加密它。
 
-某些 agent hook 在歷史上曾將明文控制文字放入 `encrypted_content` 插槽。為相容性，代理將該明文分離為 text 部分，同時保留任何結構有效的 Fernet run 不變。若 `agent_message` 在該修復期間失去所有加密部分，它成為普通使用者訊息。若目前的 v2 task 保持真正加密，但沒有規範消費者或明確受信任、可不透明轉發的 Responses 目標，opencodex 以 `unreadable_encrypted_agent_task` 失敗，而非發送不可讀的位元組給該供應商。關於 worker task 周圍的客戶端行為，請見[子代理介面](/zh-tw/guides/sub-agent-surface/)。
+某些 agent hook 在歷史上曾將明文控制文字放入 `encrypted_content` 插槽。為相容性，代理將該明文分離為 text 部分，同時保留任何結構有效的 Fernet run 不變。若 `agent_message` 在該修復期間失去所有加密部分，它成為普通使用者訊息。若目前的 v2 task 保持真正加密，但沒有規範消費者或明確受信任、可不透明轉發，且選定模型的最終 wire 保持為 `openai-responses` 的 Responses 目標，opencodex 以 `unreadable_encrypted_agent_task` 失敗，而非發送不可讀的位元組給該供應商。關於 worker task 周圍的客戶端行為，請見[子代理介面](/zh-tw/guides/sub-agent-surface/)。

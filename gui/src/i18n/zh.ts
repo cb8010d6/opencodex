@@ -1930,7 +1930,7 @@ export const zh: Record<TKey, string> = {
   "pws.note": "备注",
   "pws.allowPrivateNetwork": "允许本地/私有网络",
   "pws.encryptedV2Passthrough": "透传加密的 V2 子代理任务",
-  "pws.encryptedV2PassthroughDesc": "信任此 Responses 端点能够处理 Codex 的不透明加密任务。OpenCodex 不会解密或恢复任务；仅在确认提供方兼容后启用。",
+  "pws.encryptedV2PassthroughDesc": "信任此 Responses 端点能够处理或原样转发 Codex 的不透明加密 V2 子任务密文。OpenCodex 不会解密、翻译或恢复它；仅在确认提供方兼容后启用。",
   "pws.encryptedV2Confirm": "要信任此提供方处理不透明的加密 V2 子代理任务吗？不兼容的端点可能因无法读取任务而失败。",
   "pws.liveModels": "从提供方发现模型",
   "pws.liveModelsDesc": "获取提供方的实时模型目录。关闭后仅使用已配置的静态模型。",
