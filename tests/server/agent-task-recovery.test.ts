@@ -146,6 +146,34 @@ describe("agent task recovery (opt-in, default off)", () => {
     expect(fetchedUrls[0]).toContain("chatgpt.com/backend-api/codex");
   });
 
+  test("trusted direct Responses routes bypass recovery and preserve encrypted tasks", async () => {
+    const config = routedConfig();
+    config.providers.relay = {
+      adapter: "openai-responses",
+      baseUrl: "https://relay.example.test/v1",
+      authMode: "key",
+      apiKey: "test-relay-key",
+      allowEncryptedV2AgentTasks: true,
+    };
+    const input = encryptedInput();
+    const fetchedUrls: string[] = [];
+    let forwardedInput: unknown;
+    globalThis.fetch = (async (url, init) => {
+      fetchedUrls.push(String(url));
+      const body = JSON.parse(String(init?.body)) as { input?: unknown };
+      forwardedInput = body.input;
+      return providerResponse();
+    }) as typeof fetch;
+
+    const response = await post(config, "relay/gpt-5.6-luna", input, codexHeaders());
+
+    expect(response.status).toBe(200);
+    expect(fetchedUrls).toHaveLength(1);
+    expect(fetchedUrls[0]).toContain("relay.example.test");
+    expect(fetchedUrls[0]).not.toContain("chatgpt.com");
+    expect(forwardedInput).toEqual(input);
+  });
+
   test("authenticated ChatGPT recovery accepts the decrypted payload without a duplicated routing envelope", async () => {
     const assignment = "Implement the focused regression test.";
     const fetchedUrls: string[] = [];
