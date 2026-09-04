@@ -1771,7 +1771,6 @@ function canPassThroughEncryptedV2AgentTask(
   if (
     inboundWire !== "responses"
     || provider.allowEncryptedV2AgentTasks !== true
-    || provider.adapter !== "openai-responses"
     || (provider.authMode ?? "key") !== "key"
   ) return false;
 
