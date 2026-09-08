@@ -1058,7 +1058,7 @@ function LogDetailDialog({
             <p className="log-detail-notes-line muted">{t(metricReasonKey(detail.displayMetrics.tokPerSecond.reason))}</p>
           )}
           {detail.displayMetrics?.tokPerSecond.kind === "value"
-            && detail.displayMetrics.decodeTokPerSecond.kind === "unavailable" && (
+            && detail.displayMetrics.decodeTokPerSecond?.kind === "unavailable" && (
             <p className="log-detail-notes-line muted">
               {t("logs.col.decodeTokPerSec")}: {t(metricReasonKey(detail.displayMetrics.decodeTokPerSecond.reason))}
             </p>

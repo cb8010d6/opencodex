@@ -520,6 +520,24 @@ test("Logs: inside-card clicks keep the detail dialog open; backdrop dismiss clo
   await act(async () => { root.unmount(); });
 });
 
+test("Logs: a cached pre-decode-metric row opens its detail dialog", async () => {
+  sessionStorage.setItem("ocx.logs.list.v1:http://localhost", JSON.stringify([sampleLog]));
+  globalThis.fetch = (async (input) => {
+    if (!String(input).includes("/api/logs")) return jsonResponse({ timeZone: "UTC" });
+    return jsonResponse([sampleLog]);
+  }) as typeof fetch;
+
+  const { root, container } = await mountLogs();
+  try {
+    await flushMicrotasks();
+    await act(async () => { container.querySelector<HTMLButtonElement>(".log-detail-btn")!.click(); });
+    expect(container.querySelector("dialog")).not.toBeNull();
+    expect(container.querySelector(".log-detail-card")?.textContent).toContain("tok/s");
+  } finally {
+    await act(async () => { root.unmount(); });
+  }
+});
+
 // #2157: the Codex App sends helper requests on every message and turn completion. That
 // traffic is the App's, not ours -- what is ours is making an INTERCEPTED one identifiable, so
 // the reporter can tell recurring helper spend from their own work.
