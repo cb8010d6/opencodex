@@ -109,6 +109,17 @@ describe("rich Logs filtering", () => {
     expect(filterLogs([...logs, unavailable], { ...DEFAULT_LOG_FILTER_STATE, minTokPerSec: 50 }, NOW).map(row => row.id)).toEqual(["codex", "helper"]);
   });
 
+  test("keeps speed filters on end-to-end tok/s when decode throughput is higher", () => {
+    const rows = [{
+      id: "slow-e2e-fast-decode",
+      displayMetrics: {
+        tokPerSecond: { kind: "value" as const, value: 10 },
+        decodeTokPerSecond: { kind: "value" as const, value: 100 },
+      },
+    }];
+    expect(filterLogs(rows, { ...DEFAULT_LOG_FILTER_STATE, minTokPerSec: 50 }, NOW)).toEqual([]);
+  });
+
   test("extracts sorted unique options and ignores malformed attempts", () => {
     const options = extractLogFilterOptions([
       ...logs,

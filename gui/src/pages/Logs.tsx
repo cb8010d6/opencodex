@@ -52,6 +52,7 @@ type LogUsageStatus = "reported" | "unreported" | "unsupported" | "estimated";
 
 type MetricUnavailableReason =
   | "usage_missing" | "usage_unsupported" | "output_missing" | "invalid_duration"
+  | "ttft_missing"
   | "price_unmatched" | "invalid_cache_breakdown"
   | "invalid_usage" | "combo_attempt_unavailable";
 
@@ -92,6 +93,7 @@ type CostResult =
 
 interface LogDisplayMetrics {
   tokPerSecond: TokPerSecondResult;
+  decodeTokPerSecond: TokPerSecondResult;
   cost: CostResult;
 }
 
@@ -272,6 +274,7 @@ const METRIC_REASON_KEYS = {
   usage_unsupported: "logs.detail.reason.usage_unsupported",
   output_missing: "logs.detail.reason.output_missing",
   invalid_duration: "logs.detail.reason.invalid_duration",
+  ttft_missing: "logs.detail.reason.ttft_missing",
   price_unmatched: "logs.detail.reason.price_unmatched",
   invalid_cache_breakdown: "logs.detail.reason.invalid_cache_breakdown",
   invalid_usage: "logs.detail.reason.invalid_usage",
@@ -752,7 +755,14 @@ export default function Logs({ apiBase }: { apiBase: string }) {
              <tr>
                <th>{t("logs.col.time")}</th>
                 <th className="num log-col-tokens">{t("logs.col.tokens")}</th>
-                <th className="num log-col-rate" title={t("logs.metric.tokPerSecTitle")}>{t("logs.col.tokPerSec")}</th>
+                <th className="num log-col-rate">
+                  <span className="logs-stack-end">
+                    <span title={t("logs.metric.tokPerSecTitle")}>{t("logs.col.tokPerSec")}</span>
+                    <span className="muted text-caption leading-tight" title={t("logs.metric.decodeTokPerSecTitle")}>
+                      {t("logs.col.decodeTokPerSec")}
+                    </span>
+                  </span>
+                </th>
                 <th className="num log-col-cost" title={t("logs.metric.estimatedCostTitle")}>{t("logs.col.estimatedCost")}</th>
                <th className="log-col-model">{t("logs.col.model")}</th>
                <th>{t("logs.col.effort")}</th>
@@ -813,7 +823,12 @@ export default function Logs({ apiBase }: { apiBase: string }) {
                     })()}
                   </td>
                   <td className="num mono log-col-rate">
-                    {formatTokPerSecond(log.displayMetrics?.tokPerSecond, localeTag)}
+                    <span className="logs-stack-end">
+                      <span>{formatTokPerSecond(log.displayMetrics?.tokPerSecond, localeTag)}</span>
+                      <span className="muted text-caption leading-tight" title={t("logs.metric.decodeTokPerSecTitle")}>
+                        {formatTokPerSecond(log.displayMetrics?.decodeTokPerSecond, localeTag)}
+                      </span>
+                    </span>
                   </td>
                   <td className="num mono log-col-cost">
                     {formatEstimatedUsd(log.displayMetrics?.cost, t, localeTag)}
@@ -1033,12 +1048,20 @@ function LogDetailDialog({
           <div className="log-detail-grid">
             <span className="muted">{t("logs.col.duration")}</span><span className="mono">{detail.durationMs}ms</span>
             <span className="muted">{t("logs.col.tokPerSec")}</span><span className="mono">{formatTokPerSecond(detail.displayMetrics?.tokPerSecond, localeTag)}</span>
+            <span className="muted" title={t("logs.metric.decodeTokPerSecTitle")}>{t("logs.col.decodeTokPerSec")}</span>
+            <span className="mono">{formatTokPerSecond(detail.displayMetrics?.decodeTokPerSecond, localeTag)}</span>
             {detail.firstOutputMs !== undefined && (
               <><span className="muted">{t("logs.detail.ttft")}</span><span className="mono">{detail.firstOutputMs}ms</span></>
             )}
           </div>
           {detail.displayMetrics?.tokPerSecond.kind === "unavailable" && (
             <p className="log-detail-notes-line muted">{t(metricReasonKey(detail.displayMetrics.tokPerSecond.reason))}</p>
+          )}
+          {detail.displayMetrics?.tokPerSecond.kind === "value"
+            && detail.displayMetrics.decodeTokPerSecond.kind === "unavailable" && (
+            <p className="log-detail-notes-line muted">
+              {t("logs.col.decodeTokPerSec")}: {t(metricReasonKey(detail.displayMetrics.decodeTokPerSecond.reason))}
+            </p>
           )}
         </section>
 
@@ -1088,6 +1111,7 @@ function LogDetailDialog({
                   <th>{t("logs.detail.attempt.target")}</th>
                   <th className="num">{t("logs.col.duration")}</th>
                   <th className="num">{t("logs.col.tokPerSec")}</th>
+                  <th className="num" title={t("logs.metric.decodeTokPerSecTitle")}>{t("logs.col.decodeTokPerSec")}</th>
                   <th className="num">{t("logs.col.estimatedCost")}</th>
                   <th>{t("logs.detail.attempt.reason")}</th>
                 </tr></thead>
@@ -1125,6 +1149,7 @@ function LogDetailDialog({
                       </td>
                       <td className="num mono">{attempt.durationMs}ms</td>
                       <td className="num mono">{formatTokPerSecond(attempt.displayMetrics?.tokPerSecond, localeTag)}</td>
+                      <td className="num mono">{formatTokPerSecond(attempt.displayMetrics?.decodeTokPerSecond, localeTag)}</td>
                       <td className="num mono">{formatEstimatedUsd(attemptCost, t, localeTag)}</td>
                       <td className="log-detail-break">{reason}</td>
                     </tr>

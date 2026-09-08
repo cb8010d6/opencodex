@@ -78,6 +78,7 @@ export function parseDebugLogQuery(url: URL): { after: number; limit: number } {
 
 export type MetricUnavailableReason =
   | "usage_missing" | "usage_unsupported" | "output_missing" | "invalid_duration"
+  | "ttft_missing"
   | "price_unmatched" | "invalid_cache_breakdown"
   | "invalid_usage" | "combo_attempt_unavailable";
 
@@ -96,7 +97,7 @@ export type CostResult =
   | { kind: "value"; estimate: NonNullable<ReturnType<typeof estimateRequestCost>>; estimateReasons: CostEstimateReason[] }
   | { kind: "unavailable"; reason: MetricUnavailableReason };
 
-export type MetricSource = Pick<RequestLogEntry, "provider" | "model" | "durationMs" | "usageStatus" | "usage" | "requestedServiceTier" | "configuredServiceTier" | "responseServiceTier" | "tierOutcome" | "routeDecision"> & {
+export type MetricSource = Pick<RequestLogEntry, "provider" | "model" | "durationMs" | "firstOutputMs" | "usageStatus" | "usage" | "requestedServiceTier" | "configuredServiceTier" | "responseServiceTier" | "tierOutcome" | "routeDecision"> & {
   attempts?: readonly PersistedUsageAttempt[];
 };
 
@@ -111,6 +112,28 @@ export function tokPerSecondResult(entry: Pick<MetricSource, "durationMs" | "usa
     };
   }
   return { kind: "value", value, estimated: entry.usageStatus === "estimated" || entry.usage.estimated === true };
+}
+
+/**
+ * Estimated post-TTFT output rate. TTFT is relative to the same request or attempt whose
+ * duration is supplied here, so callers must not mix parent and attempt timings. The value
+ * remains an estimate because stream finalization and network pauses after first output are
+ * still included in the denominator.
+ */
+export function decodeTokPerSecondResult(
+  entry: Pick<MetricSource, "durationMs" | "firstOutputMs" | "usageStatus" | "usage">,
+): TokPerSecondResult {
+  if (!entry.usage) return { kind: "unavailable", reason: "usage_missing" };
+  if (entry.usageStatus === "unsupported") return { kind: "unavailable", reason: "usage_unsupported" };
+  if (entry.usage.outputTokens <= 0) return { kind: "unavailable", reason: "output_missing" };
+  if (entry.firstOutputMs === undefined) return { kind: "unavailable", reason: "ttft_missing" };
+  if (!Number.isFinite(entry.firstOutputMs) || entry.firstOutputMs < 0) {
+    return { kind: "unavailable", reason: "invalid_duration" };
+  }
+  const decodeDurationMs = entry.durationMs - entry.firstOutputMs;
+  const value = tokensPerSecond(entry.usage.outputTokens, decodeDurationMs);
+  if (value === null) return { kind: "unavailable", reason: "invalid_duration" };
+  return { kind: "value", value, estimated: true };
 }
 
 export function unavailableCostReason(entry: MetricSource): MetricUnavailableReason {
@@ -157,6 +180,7 @@ export function requestLogDto(entry: RequestLogEntry): Record<string, unknown> {
     ...entry,
     displayMetrics: {
       tokPerSecond: tokPerSecondResult(entry),
+      decodeTokPerSecond: decodeTokPerSecondResult(entry),
       cost: costResult(entry),
     },
     ...(entry.attempts?.length
@@ -165,6 +189,7 @@ export function requestLogDto(entry: RequestLogEntry): Record<string, unknown> {
           ...attempt,
           displayMetrics: {
             tokPerSecond: tokPerSecondResult(attempt),
+            decodeTokPerSecond: decodeTokPerSecondResult(attempt),
             cost: costResult({ ...attempt, attempts: undefined, routeDecision: entry.routeDecision, requestedServiceTier: entry.requestedServiceTier, configuredServiceTier: entry.configuredServiceTier, responseServiceTier: entry.responseServiceTier }),
           },
         })),

@@ -158,17 +158,73 @@ describe("GET /api/logs display metrics", () => {
     expect(body.logs?.map(row => row.requestId)).toEqual(["ok-b"]);
   });
 
-  test("adds tok/s and cost without mutating the stored log", async () => {
+  test("adds end-to-end and estimated decode tok/s without mutating the stored log", async () => {
     addRequestLog(baseEntry({
+      firstOutputMs: 500,
       usage: { inputTokens: 1000, outputTokens: 240 },
     }));
     const [dto] = await readLogs();
     expect(dto!.displayMetrics.tokPerSecond).toEqual({ kind: "value", value: 120, estimated: false });
+    expect(dto!.displayMetrics.decodeTokPerSecond).toEqual({ kind: "value", value: 160, estimated: true });
     expect(dto!.displayMetrics.cost.kind).toBe("value");
     expect(dto!.displayMetrics.cost.estimate.cost.total).toBeGreaterThan(0);
     expect(dto!.displayMetrics.cost.estimate.price.source).toBe("jawcode");
     // stored entry stays clean
     expect(Object.hasOwn(getRequestLogEntries()[0]!, "displayMetrics")).toBe(false);
+  });
+
+  test("decode tok/s requires TTFT and a positive post-TTFT duration", async () => {
+    addRequestLog(baseEntry({
+      requestId: "missing-ttft",
+      usage: { inputTokens: 100, outputTokens: 10 },
+    }));
+    addRequestLog(baseEntry({
+      requestId: "invalid-post-ttft-duration",
+      durationMs: 2_000,
+      firstOutputMs: 2_000,
+      usage: { inputTokens: 100, outputTokens: 10 },
+    }));
+    addRequestLog(baseEntry({
+      requestId: "invalid-negative-ttft",
+      firstOutputMs: -1,
+      usage: { inputTokens: 100, outputTokens: 10 },
+    }));
+
+    const logs = await readLogs();
+    const byId = new Map(logs.map(log => [log.requestId, log]));
+    expect(byId.get("missing-ttft")!.displayMetrics.decodeTokPerSecond)
+      .toEqual({ kind: "unavailable", reason: "ttft_missing" });
+    expect(byId.get("invalid-post-ttft-duration")!.displayMetrics.decodeTokPerSecond)
+      .toEqual({ kind: "unavailable", reason: "invalid_duration" });
+    expect(byId.get("invalid-negative-ttft")!.displayMetrics.decodeTokPerSecond)
+      .toEqual({ kind: "unavailable", reason: "invalid_duration" });
+  });
+
+  test("combo attempts use their own attempt-relative TTFT for decode tok/s", async () => {
+    addRequestLog(baseEntry({
+      durationMs: 10_000,
+      firstOutputMs: 2_000,
+      usage: { inputTokens: 100, outputTokens: 240 },
+      attempts: [{
+        ordinal: 1,
+        provider: "anthropic",
+        model: "claude-3-haiku-20240307",
+        adapter: "anthropic",
+        status: 200,
+        durationMs: 4_000,
+        firstOutputMs: 500,
+        sendCount: 1,
+        recoveryKinds: [],
+        usageStatus: "reported",
+        usage: { inputTokens: 100, outputTokens: 70 },
+      }],
+    }));
+
+    const [dto] = await readLogs();
+    expect(dto!.displayMetrics.decodeTokPerSecond)
+      .toEqual({ kind: "value", value: 30, estimated: true });
+    expect(dto!.attempts[0].displayMetrics.decodeTokPerSecond)
+      .toEqual({ kind: "value", value: 20, estimated: true });
   });
 
   test("estimated positive output marks tok/s estimated and keeps cost value", async () => {
