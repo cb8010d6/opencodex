@@ -776,7 +776,7 @@ export const fr: Record<TKey, string> = {
   "logs.col.status": "État",
   "logs.col.tokens": "Jetons",
   "logs.col.tokPerSec": "jetons/s",
-  "logs.col.decodeTokPerSec": "décodage jetons/s",
+  "logs.col.decodeTokPerSec": "jetons/s (décodage)",
   "logs.col.estimatedCost": "~$",
   "logs.metric.tokPerSecTitle": "Jetons de sortie par seconde sur toute la durée de la requête",
   "logs.metric.decodeTokPerSecTitle": "Estimation des jetons de sortie par seconde après le TTFT ; la finalisation du flux et les pauses réseau peuvent rester incluses",

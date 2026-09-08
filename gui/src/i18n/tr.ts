@@ -782,7 +782,7 @@ export const tr: Record<TKey, string> = {
   "logs.col.status": "Durum",
   "logs.col.tokens": "Jetonlar",
   "logs.col.tokPerSec": "jeton/sn",
-  "logs.col.decodeTokPerSec": "decode jeton/sn",
+  "logs.col.decodeTokPerSec": "çözümleme jeton/sn",
   "logs.col.estimatedCost": "~$",
   "logs.metric.tokPerSecTitle": "Tam istek süresince saniye başına çıktı jetonu",
   "logs.metric.decodeTokPerSecTitle": "TTFT sonrasında saniye başına tahmini çıktı jetonu; akış sonlandırma ve ağ beklemeleri hâlâ dahil olabilir",
