@@ -5,6 +5,7 @@ import { captureConfigGeneration, type GenerationContext } from "../lib/state-st
 import { isThirtyDayOnlyCodexPlan } from "./plan";
 import { MAIN_CODEX_ACCOUNT_ID } from "./account-id";
 import { getObservedMainQuotaIdentityKey, isMainQuotaWriterLive, type MainQuotaWriter } from "./main-account-cache";
+import type { CodexQuotaScope } from "./routing";
 
 import type { StoredAccountQuota, WhamUsageResponse, WhamUsageWindow } from "./quota-types";
 export type { StoredAccountQuota, WhamUsageResponse } from "./quota-types";
@@ -44,6 +45,8 @@ const MONTHLY_WINDOW_MIN_MINUTES = MONTHLY_WINDOW_MIN_SECONDS / 60;
 // Derived, never written as a literal: the header parser and the WHAM parser must not be able
 // to drift to different thresholds, which is the class of defect this pair exists to prevent.
 const WEEKLY_WINDOW_MIN_MINUTES = WEEKLY_WINDOW_MIN_SECONDS / 60;
+const CODEX_SPARK_SHORT_LABEL = "GPT-5.3-Codex-Spark 5h";
+const CODEX_SPARK_WEEKLY_LABEL = "GPT-5.3-Codex-Spark Weekly";
 
 const accountQuota = new Map<string, StoredAccountQuota>();
 let lastReconciledGeneration = 0;
@@ -480,12 +483,44 @@ export function applyAccountQuotaFromUpstreamHeaders(
   headers: Headers,
   writerGeneration = captureConfigGeneration(),
   mainWriter?: MainQuotaWriter,
+  quotaScope?: CodexQuotaScope,
 ): void {
-  const quota = parseUpstreamQuotaHeaders(headers);
-  if (!quota) return;
+  const parsed = parseUpstreamQuotaHeaders(headers);
+  if (!parsed) return;
+  let quota = parsed;
+  let policyInput = parsed;
+  if (quotaScope === "spark" && snapshotHasShort(parsed)) {
+    // Response headers do not label quota families. The caller's resolved model is the
+    // provenance: Spark's sub-day primary belongs in its custom window, while the secondary
+    // account window and any previously observed shared 5h window keep their existing meaning.
+    const {
+      shortPercent,
+      shortResetAt,
+      shortWindowSeconds: _shortWindowSeconds,
+      ...ordinaryQuota
+    } = parsed;
+    policyInput = ordinaryQuota;
+    quota = ordinaryQuota;
+    if (shortPercent !== undefined) {
+      const sparkShort = {
+        label: CODEX_SPARK_SHORT_LABEL,
+        percent: shortPercent,
+        ...(shortResetAt !== undefined ? { resetAt: shortResetAt } : {}),
+      };
+      const existing = getAccountQuota(accountId)?.customWindows ?? [];
+      let replaced = false;
+      const customWindows = existing.map(window => {
+        if (window.label !== CODEX_SPARK_SHORT_LABEL) return window;
+        replaced = true;
+        return sparkShort;
+      });
+      if (!replaced) customWindows.push(sparkShort);
+      quota = { ...ordinaryQuota, customWindows };
+    }
+  }
   const policyQuota = [
     "x-codex-primary-used-percent", "x-codex-secondary-used-percent", "x-codex-tertiary-used-percent",
-  ].some(name => isInvalidPolicyUsagePercent(headers.get(name))) ? null : filterMainPolicyMonthlyQuota(quota);
+  ].some(name => isInvalidPolicyUsagePercent(headers.get(name))) ? null : filterMainPolicyMonthlyQuota(policyInput);
   setAccountQuotaFromParsed(accountId, quota, writerGeneration, mainWriter, policyQuota);
 }
 
@@ -812,8 +847,8 @@ export function parseUsageQuota(data: WhamUsageResponse): Omit<StoredAccountQuot
   });
   const sparkCustomWindows: Array<{ label: string; percent: number; resetAt?: number }> = [];
   for (const [label, window] of [
-    ["GPT-5.3-Codex-Spark 5h", sparkShort],
-    ["GPT-5.3-Codex-Spark Weekly", sparkWeekly],
+    [CODEX_SPARK_SHORT_LABEL, sparkShort],
+    [CODEX_SPARK_WEEKLY_LABEL, sparkWeekly],
   ] as const) {
     const percent = normalizeUsagePercent(window?.used_percent);
     if (percent === undefined) continue;

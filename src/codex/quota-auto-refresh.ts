@@ -169,7 +169,8 @@ async function warmAccount(config: OcxConfig, accountId: string): Promise<void |
     try {
       await warmCodexAccount({ ...token, onCompleted: headers => {
         if (isCodexAccountGenerationLive(accountId, token.generation)) {
-          applyAccountQuotaFromUpstreamHeaders(accountId, headers, writerGeneration);
+          // Warmup's default and fallback models both use the shared account quota.
+          applyAccountQuotaFromUpstreamHeaders(accountId, headers, writerGeneration, undefined, "shared");
         }
       } });
     } catch (error) {
@@ -206,7 +207,8 @@ async function warmAccount(config: OcxConfig, accountId: string): Promise<void |
       try {
         await warmCodexAccount({ ...token, onCompleted: headers => {
           if (writer && credentialStillLive()) {
-            applyAccountQuotaFromUpstreamHeaders(accountId, headers, writerGeneration, writer);
+            // Warmup's default and fallback models both use the shared account quota.
+            applyAccountQuotaFromUpstreamHeaders(accountId, headers, writerGeneration, writer, "shared");
           }
         } });
       } catch (error) {

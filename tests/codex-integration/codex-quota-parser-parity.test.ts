@@ -49,6 +49,83 @@ describe("Spark quota survives partial header updates", () => {
     setAccountQuotaFromParsed("spark-clear", { weeklyPercent: 21 });
     expect(getAccountQuota("spark-clear")?.customWindows).toBeUndefined();
   });
+
+  it("attributes a Spark response's short primary window without creating a generic 5h quota", () => {
+    clearAccountQuota();
+    setAccountQuotaFromParsed("spark-attributed", parseUsageQuota({
+      plan_type: "pro",
+      rate_limit: {
+        primary_window: { used_percent: 53, reset_at: 2_000_000_000, limit_window_seconds: 604_800 },
+      },
+      additional_rate_limits: [{
+        limit_name: "GPT-5.3-Codex-Spark",
+        metered_feature: "codex_bengalfox",
+        rate_limit: {
+          primary_window: { used_percent: 6, reset_at: 1_900_000_000, limit_window_seconds: 18_000 },
+          secondary_window: { used_percent: 7, reset_at: 2_100_000_000, limit_window_seconds: 604_800 },
+        },
+      }],
+    }));
+
+    applyAccountQuotaFromUpstreamHeaders("spark-attributed", new Headers({
+      "x-codex-primary-used-percent": "8",
+      "x-codex-primary-reset-at": "1900000100",
+      "x-codex-primary-window-minutes": "300",
+      "x-codex-secondary-used-percent": "54",
+      "x-codex-secondary-reset-at": "2000000100",
+      "x-codex-secondary-window-minutes": "10080",
+    }), undefined, undefined, "spark");
+
+    expect(getAccountQuota("spark-attributed")).toMatchObject({
+      weeklyPercent: 54,
+      weeklyResetAt: 2_000_000_100,
+      customWindows: [
+        { label: "GPT-5.3-Codex-Spark 5h", percent: 8, resetAt: 1_900_000_100 },
+        { label: "GPT-5.3-Codex-Spark Weekly", percent: 7, resetAt: 2_100_000_000 },
+      ],
+    });
+    expect(getAccountQuota("spark-attributed")).not.toHaveProperty("shortPercent");
+    expect(getAccountQuota("spark-attributed")).not.toHaveProperty("shortResetAt");
+    expect(getAccountQuota("spark-attributed")).not.toHaveProperty("shortWindowSeconds");
+  });
+
+  it("keeps a genuine generic 5h quota while updating the Spark 5h window", () => {
+    clearAccountQuota();
+    setAccountQuotaFromParsed("spark-and-shared", {
+      shortPercent: 12,
+      shortResetAt: 2_200_000_000,
+      shortWindowSeconds: 18_000,
+    });
+
+    applyAccountQuotaFromUpstreamHeaders("spark-and-shared", new Headers({
+      "x-codex-primary-used-percent": "9",
+      "x-codex-primary-reset-at": "1900000200",
+      "x-codex-primary-window-minutes": "300",
+    }), undefined, undefined, "spark");
+
+    expect(getAccountQuota("spark-and-shared")).toMatchObject({
+      shortPercent: 12,
+      shortResetAt: 2_200_000_000,
+      shortWindowSeconds: 18_000,
+      customWindows: [{ label: "GPT-5.3-Codex-Spark 5h", percent: 9, resetAt: 1_900_000_200 }],
+    });
+  });
+
+  it("continues to store a shared model's short primary window as generic 5h quota", () => {
+    clearAccountQuota();
+    applyAccountQuotaFromUpstreamHeaders("shared-attributed", new Headers({
+      "x-codex-primary-used-percent": "10",
+      "x-codex-primary-reset-at": "1900000300",
+      "x-codex-primary-window-minutes": "300",
+    }), undefined, undefined, "shared");
+
+    expect(getAccountQuota("shared-attributed")).toMatchObject({
+      shortPercent: 10,
+      shortResetAt: 1_900_000_300,
+      shortWindowSeconds: 18_000,
+    });
+    expect(getAccountQuota("shared-attributed")?.customWindows).toBeUndefined();
+  });
 });
 
 /**

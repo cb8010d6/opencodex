@@ -61,6 +61,7 @@ import {
   type NativeMainRefreshDependencies,
 } from "../../codex/main-account";
 import {
+  codexQuotaScopeForModel,
   formatCodexProviderForLog,
   handOffThreadAffinityGeneration,
   recordCodexUpstreamOutcome,
@@ -1015,6 +1016,7 @@ export async function handleResponsesCompact(
             upstream.headers,
             authCtx.writerGeneration,
             authCtx.kind === "main-pool" ? authCtx.mainQuotaWriter : undefined,
+            codexQuotaScopeForModel(selectedModelId),
           );
         }
         recordCompactPoolOutcome(authCtx, upstream.status, {
